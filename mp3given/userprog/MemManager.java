@@ -197,15 +197,48 @@ public class MemManager{
       
       int victim = counter;
 
-      while (InBuffer(victim))
-      {
-         //You might notice that without changing the code, FIFO with 
-	 //no page buffers will work.  However, when you add page buffers, it
-	 //will not.  So I would recommend using the queue and queueCounter for
-	 //both cases.  
-	 victim = (victim + 1) % Machine.NumPhysPages;
-      }
-      
+	// FIFO policy not modified from given code.
+	if (policy == FIFO){	
+		while (InBuffer(victim)){
+			// Cycle through until we find a page not in the buffer.
+			victim = (victim + 1) % Machine.NumPhysPages;
+		}
+	}
+
+	if (policy == ESC){
+		int pass = 0; // How many passes through the list have we taken?
+		boolean keepLooking = true; // Sentry variable for loop.
+		while(keepLooking){
+			if (InBuffer(victim)){
+				// If the victim's a buffered page, do nothing.
+				victim = (victim + 1) % Machine.NumPhysPages;
+			}
+			else {
+				if ((pass %2) == 0){ // During even numbered passes, consider clean pages.
+					if (!coreOwners[victim].use && !coreOwners[victim].dirty){
+						keepLooking = false; // If clean and unused, we're done.
+					}
+					else {
+						coreOwners[victim].use = false; // Clear the use bit.
+						victim = (victim + 1) % Machine.NumPhysPages; // Look at the next
+					}
+				} // End of even pass considerations
+				else{ // During odd numbered passes, consider dirty pages.
+					if (!coreOwners[victim].use && coreOwners[victim].dirty){
+						keepLooking = false; // If dirty and unused, stop looking.
+					}
+					else {
+						coreOwners[victim].use = false; // Clear use bit
+						victim = (victim + 1) % Machine.NumPhysPages; // Look at next.
+					}
+				} // End of odd pass considerations
+			} // End of operations on pages not in buffer.
+			if (victim == counter){ // If we've gone through the entire list
+				pass++; // Increment the pass counter.
+			}
+		} // End victim search.
+	} // End of Enhanced Second Chance algorithm.
+
       //example revolving counter
       counter = (victim + 1) % Machine.NumPhysPages;
       
